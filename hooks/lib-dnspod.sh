@@ -7,8 +7,14 @@ set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────
 # DNSPod API token in format "ID,Token" (from console.dnspod.cn → 密钥管理)
-# Must be set via environment variable before certbot invokes hooks.
+# Priority: 1) environment variable  2) /etc/letsencrypt/dnspod.conf
 DNSPOD_TOKEN="${DNSPOD_TOKEN:-}"
+
+# Auto-source config file if token not already set in environment
+if [ -z "${DNSPOD_TOKEN:-}" ] && [ -f /etc/letsencrypt/dnspod.conf ]; then
+    # shellcheck source=/dev/null
+    source /etc/letsencrypt/dnspod.conf
+fi
 
 # Root domain (e.g. "example.com"). Auto-detected from CERTBOT_DOMAIN if unset.
 DOMAIN="${DOMAIN:-}"
@@ -117,10 +123,31 @@ except Exception:
 }
 
 # List TXT records for the challenge subdomain
+# Note: uses direct curl (not api_call) because DNSPod returns code=10 for
+# empty lists, which is a normal result, not an error.
 list_challenge_records() {
     local sub_domain="$1"
     local resp
-    resp=$(api_call "Record.List" "domain=${DOMAIN}&sub_domain=${sub_domain}&record_type=TXT") || return 1
+    resp=$(curl -s --connect-timeout 10 --max-time 30 -X POST \
+        "${DNSPOD_API}/Record.List" \
+        -d "login_token=${DNSPOD_TOKEN}&format=json&domain=${DOMAIN}&sub_domain=${sub_domain}&record_type=TXT") || {
+        log_warn "Curl failed for Record.List"; return 0
+    }
+
+    local code
+    code=$(echo "$resp" | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('status', {}).get('code', '10'))
+except Exception:
+    print('10')
+")
+
+    # Code 1 = has records, Code 10 = list is empty (both are success)
+    if [ "$code" != "1" ] && [ "$code" != "10" ]; then
+        log_warn "Record.List returned unexpected code=$code: $(echo "$resp" | head -c 200)"
+        return 0
+    fi
 
     echo "$resp" | python3 -c "
 import sys, json
@@ -128,11 +155,10 @@ try:
     d = json.load(sys.stdin)
     for r in d.get('records', []):
         rid = r.get('id', '')
-        val = r.get('value', '')
         if rid:
             print(rid)
 except (KeyError, json.JSONDecodeError) as e:
-    print(f'[DNSPod] Parse error: {e}', file=sys.stderr)
+    pass
 " 2>/dev/null
 }
 
