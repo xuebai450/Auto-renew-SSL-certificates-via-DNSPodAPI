@@ -1,0 +1,49 @@
+# =============================================================================
+# nginx-site.conf.example — nginx HTTPS site template for Let's Encrypt cert
+# =============================================================================
+# Copy to /etc/nginx/sites-available/your-site and symlink to sites-enabled/.
+#
+# Adjust the following before use:
+#   - listen port (default: 443)
+#   - server_name (your domain)
+#   - ssl_certificate / ssl_certificate_key paths
+#   - root (document root)
+
+server {
+    # HTTPS on standard port (or custom port if 443 is occupied)
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name your-domain.com;
+
+    # ── SSL ──────────────────────────────────────────────
+    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    # Modern SSL configuration (Mozilla Intermediate, 2024)
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # ── Security headers ─────────────────────────────────
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=63072000" always;
+
+    # ── Document root ────────────────────────────────────
+    root /var/www/your-site;
+    index index.html;
+
+    # ── Locations ────────────────────────────────────────
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

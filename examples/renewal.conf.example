@@ -1,0 +1,25 @@
+# =============================================================================
+# renewal.conf.example — Certbot renewal configuration template
+# =============================================================================
+# Copy and rename this file to /etc/letsencrypt/renewal/your-domain.com.conf
+# after running the initial certbot certificate request.
+#
+# This is a REFERENCE template — certbot generates the actual file automatically
+# when you first obtain a certificate. Edit the generated file to adjust hooks.
+
+version = 2.9.0
+archive_dir = /etc/letsencrypt/archive/your-domain.com
+cert = /etc/letsencrypt/live/your-domain.com/cert.pem
+privkey = /etc/letsencrypt/live/your-domain.com/privkey.pem
+chain = /etc/letsencrypt/live/your-domain.com/chain.pem
+fullchain = /etc/letsencrypt/live/your-domain.com/fullchain.pem
+
+# Options used in the renewal process
+[renewalparams]
+authenticator = manual
+pref_challs = dns-01
+manual_auth_hook = /etc/letsencrypt/hooks/dnspod-auth.sh
+manual_cleanup_hook = /etc/letsencrypt/hooks/dnspod-cleanup.sh
+server = https://acme-v02.api.letsencrypt.org/directory
+# Uncomment to add a deploy hook that reloads nginx after renewal:
+# deploy_hook = /etc/letsencrypt/renewal-hooks/deploy/nginx-reload.sh

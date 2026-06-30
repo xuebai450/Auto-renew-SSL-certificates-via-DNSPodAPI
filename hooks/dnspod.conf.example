@@ -1,0 +1,15 @@
+# dnspod.conf — Credentials file for DNSPod API
+#
+# Copy this to /etc/letsencrypt/dnspod.conf and fill in your values:
+#   cp dnspod.conf.example /etc/letsencrypt/dnspod.conf
+#   chmod 600 /etc/letsencrypt/dnspod.conf
+#
+# The hook scripts will source this file if DNSPOD_TOKEN is not already
+# set in the environment.
+
+# DNSPod API token in "ID,Token" format
+# Get it from: https://console.dnspod.cn → 密钥管理
+DNSPOD_TOKEN="YOUR_DNSPOD_ID,YOUR_DNSPOD_TOKEN"
+
+# Root domain (optional — auto-detected from CERTBOT_DOMAIN if empty)
+DOMAIN=""

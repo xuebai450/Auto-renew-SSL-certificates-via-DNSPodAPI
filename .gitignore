@@ -1,0 +1,10 @@
+# Configuration files with real credentials — NEVER commit
+dnspod.conf
+
+# Backup/temp files
+*.bak
+*.swp
+*~
+
+# macOS
+.DS_Store
