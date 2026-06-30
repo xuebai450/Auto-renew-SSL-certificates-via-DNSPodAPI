@@ -33,7 +33,7 @@ main() {
     # Find nginx configs that reference the renewed lineage
     local matching_sites=""
     if [ -d "$SITES_DIR" ]; then
-        matching_sites=$(grep -rl "$renewed_lineage" "$SITES_DIR" 2>/dev/null || true)
+        matching_sites=$(grep -Rl "$renewed_lineage" "$SITES_DIR" 2>/dev/null || true)
     fi
 
     if [ -z "$matching_sites" ]; then
