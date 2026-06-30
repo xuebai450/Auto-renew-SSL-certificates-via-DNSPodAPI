@@ -176,9 +176,9 @@ cleanup_challenge_records() {
     list_challenge_records "$sub_domain" | while read -r rid; do
         [ -n "$rid" ] && {
             log_info "Removing record ID: $rid"
-            remove_record "$rid"
+            remove_record "$rid" || log_warn "Failed to remove record $rid, continuing"
         }
-    done
+    done || true  # pipefail safe: cleanup is best-effort, never fatal
 }
 
 # Create a new TXT challenge record

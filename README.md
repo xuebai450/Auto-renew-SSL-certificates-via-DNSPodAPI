@@ -29,8 +29,8 @@ cd ssl-auto-renewal
 # 设置 DNSPod Token
 export DNSPOD_TOKEN="12345,abcdef1234567890abcdef1234567890"
 
-# 部署（需要 sudo）
-sudo ./deploy.sh your-domain.com admin@example.com
+# 部署（-E 保留环境变量，使 DNSPOD_TOKEN 可传递到 root）
+sudo -E ./deploy.sh your-domain.com admin@example.com
 ```
 
 ### 3. 手动部署

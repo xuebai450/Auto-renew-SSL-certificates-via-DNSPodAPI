@@ -4,7 +4,7 @@
 # Usage:
 #   chmod +x deploy.sh
 #   export DNSPOD_TOKEN="ID,Token"    # or: source dnspod.env
-#   sudo ./deploy.sh your-domain.com
+#   sudo -E ./deploy.sh your-domain.com   # -E preserves env vars
 #
 # What it does:
 #   1. Installs certbot and dependencies
@@ -66,7 +66,9 @@ main() {
         err "DNSPOD_TOKEN environment variable is not set."
         echo ""
         echo "  Get your token from: https://console.dnspod.cn → 密钥管理"
-        echo "  Then run: export DNSPOD_TOKEN='ID,Token'"
+        echo "  Then run:"
+        echo "    export DNSPOD_TOKEN='ID,Token'"
+        echo "    sudo -E ./deploy.sh your-domain.com   # -E preserves DNSPOD_TOKEN"
         exit 1
     fi
 
@@ -106,9 +108,10 @@ main() {
     chmod 755 "${CERTBOT_DEPLOY_DIR}/nginx-reload.sh"
     log "  Installed: ${CERTBOT_DEPLOY_DIR}/nginx-reload.sh"
 
-    # 4. Install certbot cli.ini (if custom)
+    # 4. Install certbot cli.ini (backup existing if any)
     log "Step 4/6: Configuring certbot..."
     if [ -f "${SCRIPT_DIR}/examples/cli.ini" ]; then
+        [ -f /etc/letsencrypt/cli.ini ] && cp /etc/letsencrypt/cli.ini /etc/letsencrypt/cli.ini.bak-$(date +%Y%m%d)
         cp "${SCRIPT_DIR}/examples/cli.ini" /etc/letsencrypt/cli.ini
     fi
 
