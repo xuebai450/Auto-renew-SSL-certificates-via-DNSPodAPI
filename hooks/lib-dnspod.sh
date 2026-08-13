@@ -63,16 +63,41 @@ validate_env() {
 # ── Domain helpers ─────────────────────────────────────────────
 detect_domain() {
     if [ -z "${DOMAIN:-}" ]; then
-        # Auto-detect: assume the registered domain is the last two parts
-        # Works for example.com, sub.example.com, but NOT for example.co.uk
-        DOMAIN=$(echo "$CERTBOT_DOMAIN" | awk -F. '{if (NF>2) print $(NF-1)"."$NF; else print}')
+        # Auto-detect the registrable domain from CERTBOT_DOMAIN.
+        # Handles common multi-part public suffixes (example.com.cn,
+        # example.co.uk, ...) so the zone is detected correctly; for
+        # other unusual suffixes set DOMAIN explicitly.
+        local name="$CERTBOT_DOMAIN"
+        case "$name" in
+            *.com.cn|*.net.cn|*.org.cn|*.gov.cn|*.edu.cn|*.co.uk|*.org.uk|*.ac.uk|*.co.jp|*.com.au|*.com.br|*.com.tw|*.com.hk|*.co.nz|*.com.sg|*.com.mx)
+                DOMAIN=$(echo "$name" | awk -F. '{print $(NF-2)"."$(NF-1)"."$NF}')
+                ;;
+            *.*.*)
+                DOMAIN=$(echo "$name" | awk -F. '{print $(NF-1)"."$NF}')
+                ;;
+            *)
+                DOMAIN="$name"
+                ;;
+        esac
         log_info "Auto-detected DOMAIN=$DOMAIN from CERTBOT_DOMAIN=$CERTBOT_DOMAIN"
     fi
 }
 
 get_sub_domain() {
-    local sub="${CERTBOT_DOMAIN%%.$DOMAIN}"
-    echo "_acme-challenge.${sub}"
+    # Returns the challenge record name relative to the zone, e.g.
+    # "_acme-challenge" for the bare domain, "_acme-challenge.www" for
+    # www.example.com. Returns an empty string on unexpected input.
+    local sub
+    case "$CERTBOT_DOMAIN" in
+        "$DOMAIN")   sub="" ;;
+        *".$DOMAIN") sub="${CERTBOT_DOMAIN%.$DOMAIN}" ;;
+        *)           sub="$CERTBOT_DOMAIN" ;;
+    esac
+    if [ -n "$sub" ]; then
+        echo "_acme-challenge.${sub}"
+    else
+        echo "_acme-challenge"
+    fi
 }
 
 # ── DNSPod API helpers ─────────────────────────────────────────
@@ -102,7 +127,7 @@ try:
     print(d.get('status', {}).get('code', 'unknown'))
 except Exception:
     print('parse_error')
-" 2>/dev/null)
+" 2>/dev/null) || code="parse_error"
 
         if [ "$code" = "1" ]; then
             echo "$resp"
@@ -141,7 +166,7 @@ try:
     print(json.load(sys.stdin).get('status', {}).get('code', '10'))
 except Exception:
     print('10')
-")
+") || code="10"
 
     # Code 1 = has records, Code 10 = list is empty (both are success)
     if [ "$code" != "1" ] && [ "$code" != "10" ]; then
@@ -186,10 +211,15 @@ create_challenge_record() {
     local sub_domain="$1"
     local value="$2"
 
-    # URL-encode the record_line parameter (默认 = default line)
+    # URL-encode the challenge value. certbot currently uses base64url
+    # (URL-safe), but encode defensively in case the format ever changes.
+    local value_enc
+    value_enc=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$value" 2>/dev/null) || value_enc="$value"
+
+    # record_line is pre-encoded: %E9%BB%98%E8%AE%A4 = "默认" (default line)
     local resp
     resp=$(api_call "Record.Create" \
-        "domain=${DOMAIN}&sub_domain=${sub_domain}&record_type=TXT&record_line=%E9%BB%98%E8%AE%A4&value=${value}&ttl=600") || return 1
+        "domain=${DOMAIN}&sub_domain=${sub_domain}&record_type=TXT&record_line=%E9%BB%98%E8%AE%A4&value=${value_enc}&ttl=600") || return 1
 
     log_info "Create response: $resp"
 

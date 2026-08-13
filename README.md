@@ -33,6 +33,10 @@ export DNSPOD_TOKEN="12345,abcdef1234567890abcdef1234567890"
 sudo -E ./deploy.sh your-domain.com admin@example.com
 ```
 
+> 部署脚本会把 token 自动写入 `/etc/letsencrypt/dnspod.conf`（权限 600）。
+> 这是**必须的**：systemd 定时器触发的自动续期在干净环境中运行，
+> 读不到部署时的环境变量，hook 脚本会从这个配置文件读取 token。
+
 ### 3. 手动部署
 
 如果不想用一键脚本：
@@ -91,7 +95,7 @@ Hook 脚本通过以下环境变量获取配置：
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `DNSPOD_TOKEN` | ✅ | DNSPod API Token，格式 `ID,Token` |
+| `DNSPOD_TOKEN` | ✅ | DNSPod API Token，格式 `ID,Token`（一键部署会自动写入 `/etc/letsencrypt/dnspod.conf`） |
 | `DOMAIN` | ❌ | 根域名，为空时自动从 `CERTBOT_DOMAIN` 检测 |
 | `MAX_RETRIES` | ❌ | API 调用最大重试次数（默认 3） |
 | `DNS_WAIT_MAX` | ❌ | DNS 传播最大等待秒数（默认 120） |
@@ -99,6 +103,8 @@ Hook 脚本通过以下环境变量获取配置：
 certbot 在调用 hook 时会自动设置 `CERTBOT_DOMAIN` 和 `CERTBOT_VALIDATION`。
 
 ### 使用配置文件（可选）
+
+一键部署会自动生成 `/etc/letsencrypt/dnspod.conf`。手动部署时按下面操作：
 
 ```bash
 # 从模板创建
@@ -108,13 +114,22 @@ sudo chmod 600 /etc/letsencrypt/dnspod.conf
 sudo nano /etc/letsencrypt/dnspod.conf
 ```
 
-然后在 hook 脚本开头 source 这个文件。一键部署脚本直接使用 `DNSPOD_TOKEN` 环境变量，无需配置文件。
+hook 脚本优先读取 `DNSPOD_TOKEN` 环境变量，未设置时才 fallback 到该配置文件，所以两种方式可以混用（例如手动测试时用环境变量，定时续期用配置文件）。
 
 ## 常见问题
 
 ### 为什么用 DNS-01 而不是 HTTP-01？
 
 国内服务器 80 端口常被封锁，HTTP-01 challenge 不可用。DNS-01 只需要能调用 DNSPod API 创建 TXT 记录，无需开放任何入站端口。
+
+### 多段后缀域名（.com.cn / .co.uk 等）怎么办？
+
+脚本内置了常见多段后缀检测：`com.cn`、`net.cn`、`org.cn`、`gov.cn`、`edu.cn`、`co.uk`、`org.uk`、`ac.uk`、`co.jp`、`com.au`、`com.br`、`com.tw`、`com.hk`、`co.nz`、`com.sg`、`com.mx` 会自动识别为注册域。其他非常规后缀（如 `com.xx` 之类的私有后缀）请显式设置根域名：
+
+```bash
+export DOMAIN="example.com.cn"
+sudo -E ./deploy.sh www.example.com.cn admin@example.com
+```
 
 ### Token 安全吗？
 

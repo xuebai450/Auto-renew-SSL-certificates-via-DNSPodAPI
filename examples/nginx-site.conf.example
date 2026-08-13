@@ -11,9 +11,10 @@
 
 server {
     # HTTPS on standard port (or custom port if 443 is occupied)
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+    # `listen ... ssl http2;` works on all nginx versions. On nginx >= 1.25.1
+    # you may instead use:  listen 443 ssl;  http2 on;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
 
     server_name your-domain.com;
 
