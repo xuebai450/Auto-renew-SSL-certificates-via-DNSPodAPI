@@ -23,13 +23,17 @@ main() {
 
     log_info "Creating TXT record: ${sub_domain}.${DOMAIN} = ${CERTBOT_VALIDATION}"
 
-    # Clean up any leftover challenge records from previous runs
-    cleanup_challenge_records "$sub_domain"
+    # NOTE: Do NOT delete existing _acme-challenge TXT records here.
+    # When requesting both "example.com" and "*.example.com", certbot issues
+    # two DNS-01 challenges that share the SAME _acme-challenge.<domain> record
+    # name. If we removed prior records, the second challenge's auth-hook call
+    # would clobber the first challenge's TXT, causing LE to report
+    # "Incorrect TXT record" for the first domain. We append instead and let
+    # dnspod-cleanup.sh remove all records once validation completes.
+    # (Multiple TXT values may temporarily coexist on the same name; this is
+    # valid DNS and Let's Encrypt accepts whichever one matches.)
 
-    # Brief pause to let deletions propagate
-    sleep 2
-
-    # Create new challenge record
+    # Create new challenge record (append; do NOT clean up first)
     local record_id
     record_id=$(create_challenge_record "$sub_domain" "$CERTBOT_VALIDATION") || {
         log_error "Failed to create TXT record"
