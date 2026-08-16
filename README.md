@@ -131,6 +131,20 @@ export DOMAIN="example.com.cn"
 sudo -E ./deploy.sh www.example.com.cn admin@example.com
 ```
 
+### 申请泛域名 / 多域名证书
+
+DNS-01 challenge 支持通配符。用逗号分隔多个域名传给 deploy.sh 即可，`--cert-name` 会自动取第一个域名（去掉 `*.` 前缀）作为证书名：
+
+```bash
+# 申请 5d5d.com 及其所有子域的泛域名证书
+export DNSPOD_TOKEN="ID,Token"
+sudo -E ./deploy.sh "5d5d.com,*.5d5d.com" admin@example.com
+```
+
+签发后证书位于 `/etc/letsencrypt/live/5d5d.com/`，`pve.5d5d.com`、`ikuai.5d5d.com` 等所有子域均被覆盖。
+nginx 的 `ssl_certificate` 指向 `live/5d5d.com/fullchain.pem` 即可。
+泛域名证书私钥会同时被所有子域服务使用，分发到其他机器（如软路由）时请注意私钥泄露风险。
+
 ### Token 安全吗？
 
 - Token 通过环境变量传入，不写在脚本中

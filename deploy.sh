@@ -44,7 +44,9 @@ check_root() {
 usage() {
     echo "Usage: $0 <domain> [email]"
     echo ""
-    echo "  domain   — Domain name for the SSL certificate (e.g. example.com)"
+    echo "  domain   — Domain name(s) for the SSL certificate."
+    echo "              Single:          example.com"
+    echo "              Multi/wildcard:  \"example.com,*.example.com\"  (comma-separated)"
     echo "  email    — Email for Let's Encrypt notifications (optional but recommended)"
     echo ""
     echo "Environment variables:"
@@ -53,6 +55,7 @@ usage() {
     echo "Example:"
     echo "  export DNSPOD_TOKEN='12345,abcdef...'"
     echo "  sudo ./deploy.sh example.com admin@example.com"
+    echo "  sudo ./deploy.sh \"example.com,*.example.com\" admin@example.com"
     exit 1
 }
 
@@ -79,6 +82,11 @@ main() {
     local email="${2:-}"
 
     [ -z "$domain" ] && usage
+
+    # For multi-domain / wildcard requests (comma-separated), derive a stable
+    # cert-name from the first label, stripping any leading "*." wildcard prefix.
+    local cert_name="${domain%%,*}"
+    cert_name="${cert_name#\*.}"
 
     if [ -z "${DNSPOD_TOKEN:-}" ]; then
         err "DNSPOD_TOKEN environment variable is not set."
@@ -185,11 +193,14 @@ EOF
 
     # 6. Request initial certificate
     log "Step 6/6: Requesting initial certificate for $domain..."
-    if [ -d "/etc/letsencrypt/live/${domain}" ]; then
-        warn "Certificate for ${domain} already exists — skipping initial request."
+    if [ -d "/etc/letsencrypt/live/${cert_name}" ]; then
+        warn "Certificate '${cert_name}' already exists — skipping initial request."
         warn "Renewals are handled automatically by certbot.timer."
         return 0
     fi
+    # certbot accepts comma-separated -d for multiple SANs, and the DNS-01
+    # challenge supports wildcards (*.example.com). Pin a stable --cert-name
+    # (derived from the first label) so renewals / re-runs stay idempotent.
     local certbot_args=(
         certonly
         --manual
@@ -197,6 +208,7 @@ EOF
         --manual-auth-hook "${CERTBOT_HOOKS_DIR}/dnspod-auth.sh"
         --manual-cleanup-hook "${CERTBOT_HOOKS_DIR}/dnspod-cleanup.sh"
         -d "$domain"
+        --cert-name "$cert_name"
         --agree-tos
         --non-interactive
     )
@@ -215,12 +227,12 @@ EOF
     if certbot "${certbot_args[@]}"; then
         log "Certificate obtained successfully!"
         log ""
-        log "Certificate files: /etc/letsencrypt/live/${domain}/"
+        log "Certificate files: /etc/letsencrypt/live/${cert_name}/"
         log ""
         log "Next steps:"
         log "  1. Configure nginx to use:"
-        log "       ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem"
-        log "       ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem"
+        log "       ssl_certificate     /etc/letsencrypt/live/${cert_name}/fullchain.pem"
+        log "       ssl_certificate_key /etc/letsencrypt/live/${cert_name}/privkey.pem"
         log "  2. Reload nginx now (the deploy hook only runs on renewal):"
         log "       nginx -t && systemctl reload nginx"
         log "  3. Test auto-renewal:   certbot renew --dry-run"
