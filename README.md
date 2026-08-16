@@ -153,17 +153,45 @@ nginx 的 `ssl_certificate` 指向 `live/5d5d.com/fullchain.pem` 即可。
 
 ### 续期失败怎么办？
 
+先区分两类失败：**hook/DNSPod 失败**（挑战记录没建上）和**账户配置失败**（更早，发生在 hook 之前）。
+
 ```bash
-# 查看日志
+# 1. 先看 systemd 服务最近执行结果（最重要，dry-run 之外必查）
 journalctl -u certbot.service -n 50
 
-# 检查 Token 是否有效
+# 2. 检查 Token 是否有效
 curl -X POST https://dnsapi.cn/Account.Info \
   -d "login_token=YOUR_ID,YOUR_TOKEN&format=json"
 
-# 手动测试续期
+# 3. 手动测试续期
 sudo certbot renew --force-renewal --dry-run
 ```
+
+#### ⚠️ 已知坑：renewal 配置的 `account` 字段被写坏 → 续期静默失败
+
+真实案例（2026-08，debian 服务器）：证书一直无法续期、临期才发现。根因是
+`/etc/letsencrypt/renewal/<domain>.conf` 里 `account` 字段被写成了 shell 命令字符串
+（如 `account = $(grep account ... || echo '')`）而非合法 UUID，certbot 每次续期报
+`Account at ... does not exist`，**在调用 hook 之前就失败**。该坏行可能从证书签发之初
+就存在，后台每天静默失败，直到临期才暴露。
+
+排查与修复：
+
+```bash
+# 确认 account 字段是否合法（应为 32 位 hex UUID）
+grep '^account' /etc/letsencrypt/renewal/*.conf
+
+# 确认账户目录真实存在
+ls /etc/letsencrypt/accounts/*/directory/*/
+
+# 修复：把 account 改为真实 UUID，或删除该行（certbot 自动用默认账户），然后：
+sudo certbot renew --dry-run && sudo certbot renew
+```
+
+> **注意：`certbot renew --dry-run` 通过 ≠ 真实续期一定成功**。dry-run 走 staging
+> 流程，可能绕过真实账户校验（本次故障中 dry-run 一直通过、真实续期一直失败）。
+> 务必同时检查 `journalctl -u certbot.service` 的历史执行结果，并跑一次非 dry-run 的
+> `certbot renew` 验证。
 
 ### DNSPod 免费版 TTL 限制
 
